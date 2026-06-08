@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ระบบบริหารจัดการไฟล์ข้อมูล</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+      :root {
+        --bg-color: #f4f6f9;
+        --card-bg: #ffffff;
+        --text-color: #2b303a;
+        --text-muted: #868e96;
+        --border-color: #e9ecef;
+        --hover-bg: #f8f9fa;
+        --accent-color: #1e4620; /* ปรับโทนสีเขียวเข้มแบบสุภาพ เพื่อความเป็นสากลขององค์กรสาธารณสุข */
+      }
+      
+      [data-theme="dark"] {
+        --bg-color: #121416;
+        --card-bg: #1a1d20;
+        --text-color: #f8f9fa;
+        --text-muted: #6c757d;
+        --border-color: #343a40;
+        --hover-bg: #2b3034;
+      }
+
+      body { 
+        background-color: var(--bg-color); 
+        color: var(--text-color);
+        font-family: 'Sarabun', sans-serif; 
+        transition: background-color 0.2s, color 0.2s;
+      }
+
+      .card-file { 
+        background-color: var(--card-bg);
+        color: var(--text-color);
+        border: 1px solid var(--border-color);
+        transition: transform 0.15s, box-shadow 0.15s; 
+        border-radius: 8px;
+      }
+      .card-file:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+
+      .nav-pills .nav-link.active { background-color: var(--accent-color); color: white; }
+      .nav-pills .nav-link { color: var(--text-muted); font-weight: 600; }
+      
+      .btn-action {
+        width: 32px; height: 32px;
+        display: inline-flex; justify-content: center; align-items: center;
+        border-radius: 50%; transition: background 0.2s; cursor: pointer; color: var(--text-muted);
+      }
+      .btn-action:hover { background-color: var(--hover-bg); }
+      .btn-action.text-primary:hover { color: #0d6efd !important; }
+      .btn-action.text-danger:hover { color: #dc3545 !important; }
+
+      .loading-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6); z-index: 9999;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        backdrop-filter: blur(4px);
+      }
+
+      .theme-switch {
+        position: fixed; bottom: 20px; right: 20px; z-index: 1000;
+        width: 48px; height: 48px; border-radius: 50%;
+        background: var(--accent-color); color: white; border: none;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        display: flex; align-items: center; justify-content: center; font-size: 1.1rem; cursor: pointer;
+      }
+
+      #authOverlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: var(--bg-color); z-index: 9998;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- Auth Overlay (LIFF Login System) -->
+    <div id="authOverlay">
+      <div class="text-center p-4 card shadow-sm border-0 bg-white style=\"border-radius: 12px;\">
+        <i class="fab fa-line text-success fa-4x mb-3"></i>
+        <h4 class="fw-bold">เข้าสู่ระบบการบริหารไฟล์</h4>
+        <p class="text-muted small">กรุณาลงชื่อเข้าใช้งานสิทธิ์ของระบบภายในองค์กร</p>
+        <button id="btnLogin" class="btn btn-success rounded-pill px-4" onclick="liffLogin()" style="display:none;">ล็อกอินเข้าใช้งานผ่านแอป LINE</button>
+        <div id="authLoading" class="spinner-border text-success" role="status"></div>
+      </div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loading" class="loading-overlay" style="display:none;">
+      <div class="spinner-border text-light mb-2" role="status"></div>
+      <div class="text-white small" id="loadingText">กำลังประมวลผลข้อมูลฐานข้อมูล...</div>
+    </div>
+
+    <!-- Theme Toggle -->
+    <button class="theme-switch" onclick="toggleTheme()">
+      <i class="fas fa-moon" id="themeIcon"></i>
+    </button>
+
+    <!-- Main Container -->
+    <div id="appContent" class="container-fluid py-3 d-none">
+      
+      <!-- Sleek Header (ลบโลโก้ด้านบน ลบตัวอักษรหัวเรื่องขนาดใหญ่ตามโครงสร้าง Clean UI เพื่อเพิ่มพื้นที่การทำงาน) -->
+      <div class="row align-items-center mb-3 g-2">
+        <div class="col-sm-6 d-flex align-items-center">
+          <img id="userProfileImg" src="" class="rounded-circle me-2 d-none" style="width:40px; height:40px; object-fit:cover; border: 2px solid var(--accent-color);">
+          <span class="fw-bold small text-truncate" id="userNameDisplay">กำลังเชื่อมต่อข้อมูลผู้ใช้องค์กร...</span>
+        </div>
+        <div class="col-sm-6">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" id="searchInput" class="form-control border-start-0" placeholder="ระบุชื่อคำค้นหาที่ต้องการค้นหาไฟล์..." onkeyup="if(event.key === 'Enter') performSearch()">
+            <button class="btn btn-outline-secondary" type="button" onclick="resetView()"><i class="fas fa-times"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search Area -->
+      <div id="searchResultArea" class="d-none mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="fw-bold text-success mb-0"><i class="fas fa-search-plus"></i> ผลลัพธ์ข้อมูลการค้นหา</h5>
+          <button class="btn btn-xs btn-sm btn-outline-secondary py-0" onclick="resetView()">ล้างการค้นหา</button>
+        </div>
+        <div id="searchContent" class="row g-2"></div>
+      </div>
+
+      <!-- Main Tabs Structure -->
+      <div id="mainContent">
+        <ul class="nav nav-pills mb-2 flex-nowrap overflow-auto pb-1" id="pills-tab" role="tablist"></ul>
+        <div class="tab-content" id="pills-tabContent"></div>
+      </div>
+
+    </div>
+
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <script>
+      // คอนฟิกค่าหลักสคริปต์เชื่อมต่อข้าม Origin ไปยัง Google Apps Script ที่ Deploy เป็น Web App ไว้
+      const API_URL = "YOUR_DEPLOYED_GAS_WEB_APP_URL"; 
+      const LIFF_ID = "YOUR_LIFF_ID"; // ใส่ LIFF ID เพื่อป้องกันความปลอดภัยแบบสมบูรณ์
+      
+      document.addEventListener('DOMContentLoaded', initializeApp);
+
+      async function initializeApp() {
+        if (!LIFF_ID || LIFF_ID === "YOUR_LIFF_ID") {
+          Swal.fire('ข้อผิดพลาดระบบการเข้าถึง', 'กรุณาทำการกรอกรหัสระบุตัวตนระบบสิทธิ์ (LIFF ID) ในส่วนตั้งค่าก่อนเริ่มใช้งานบน GitHub Pages', 'error');
+          document.getElementById('authLoading').style.display = 'none';
+          return;
+        }
+
+        try {
+          await liff.init({ liffId: LIFF_ID });
+          if (liff.isLoggedIn()) {
+            const profile = await liff.getProfile();
+            verifyUser(profile);
+          } else {
+            document.getElementById('authLoading').style.display = 'none';
+            document.getElementById('btnLogin').style.display = 'inline-block';
+          }
+        } catch (err) {
+          console.error('LIFF Error:', err);
+          document.getElementById('authLoading').style.display = 'none';
+          document.getElementById('btnLogin').style.display = 'inline-block';
+        }
+      }
+
+      function liffLogin() {
+        liff.login();
+      }
+
+      function verifyUser(profile) {
+        // ดึงข้อมูลผ่าน Fetch API ไปยังเซิร์ฟเวอร์ GAS รองรับสถาปัตยกรรม GitHub Pages เต็มรูปแบบ
+        fetch(`${API_URL}?action=verifyAdmin&userId=${profile.userId}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.isAdmin) {
+              document.getElementById('authOverlay').style.display = 'none';
+              document.getElementById('appContent').classList.remove('d-none');
+              document.getElementById('userProfileImg').src = profile.pictureUrl;
+              document.getElementById('userProfileImg').classList.remove('d-none');
+              document.getElementById('userNameDisplay').textContent = profile.displayName + " (สิทธิ์ผู้ดูแลระบบ)";
+              loadData();
+            } else {
+              Swal.fire({
+                icon: 'error',
+                title: 'สิทธิ์ระบบถูกจำกัดการเข้าถึง',
+                text: 'บัญชีใช้งานของคุณไม่ได้รับอนุญาตให้ใช้โปรแกรมระบบจัดการเอกสารนี้ในระดับองค์กร',
+                allowOutsideClick: false,
+                showConfirmButton: false
+              });
+            }
+          })
+          .catch(err => {
+            Swal.fire('การเชื่อมต่อผิดพลาด', 'ไม่สามารถส่งการยืนยันตัวตนไปยัง API ปลายทางได้', 'error');
+          });
+      }
+
+      function showLoading(show, text = 'กำลังโหลดข้อมูลคลังไฟล์...') {
+        document.getElementById('loadingText').textContent = text;
+        document.getElementById('loading').style.display = show ? 'flex' : 'none';
+      }
+
+      function loadData() {
+        showLoading(true);
+        fetch(`${API_URL}?action=getDashboardData`)
+          .then(res => res.json())
+          .then(data => {
+            renderDashboard(data);
+          })
+          .catch(err => {
+            showLoading(false);
+            Swal.fire('ข้อผิดพลาดเชื่อมต่อข้อมูล', 'เซิร์ฟเวอร์ฐานข้อมูลยังไม่พร้อมใช้งานหรือขัดข้องชั่วคราว', 'error');
+          });
+      }
+
+      function renderDashboard(data) {
+        const tabList = document.getElementById('pills-tab');
+        const contentList = document.getElementById('pills-tabContent');
+        tabList.innerHTML = '';
+        contentList.innerHTML = '';
+
+        if (!data || data.length === 0) {
+           contentList.innerHTML = '<div class="text-center text-muted py-5 small">ไม่พบรายการข้อมูลสารสนเทศจัดเก็บคลัง</div>';
+           showLoading(false);
+           return;
+        }
+
+        data.forEach((category, index) => {
+          const isActive = index === 0 ? 'active' : '';
+          const tabId = `pills-${category.info.type}`;
+          let icon = 'fa-folder';
+          if(category.info.type === 'image') icon = 'fa-image';
+          if(category.info.type === 'video') icon = 'fa-video';
+          if(category.info.type === 'audio') icon = 'fa-music';
+          if(category.info.type === 'pdf') icon = 'fa-file-pdf';
+
+          const li = document.createElement('li');
+          li.className = 'nav-item';
+          li.innerHTML = `
+            <button class="nav-link ${isActive} me-1 py-1 px-2 text-nowrap small" id="${tabId}-tab" data-bs-toggle="pill" data-bs-target="#${tabId}" type="button">
+              <i class="fas ${icon}"></i> ${category.info.name}
+            </button>
+          `;
+          tabList.appendChild(li);
+
+          const div = document.createElement('div');
+          div.className = `tab-pane fade ${index === 0 ? 'show active' : ''}`;
+          div.id = tabId;
+          
+          const containerId = `container-${tabId}`;
+          div.innerHTML = `
+            <div id="${containerId}" class="row g-2 pt-2"></div>
+            <div class="text-center my-3">
+              <button id="btn-load-${tabId}" class="btn btn-sm btn-outline-dark px-3 rounded-pill d-none">โหลดข้อมูลเพิ่มขึ้น <i class="fas fa-chevron-down"></i></button>
+            </div>
+          `;
+          contentList.appendChild(div);
+          
+          appendFilesToContainer(category.files, containerId);
+
+          const loadBtn = document.getElementById(`btn-load-${tabId}`);
+          if (category.nextToken) {
+            loadBtn.classList.remove('d-none');
+            loadBtn.setAttribute('onclick', `fetchMoreFiles('${category.info.id}', '${category.info.type}', '${category.nextToken}', '${containerId}', this)`);
+          }
+        });
+
+        showLoading(false);
+      }
+
+      function fetchMoreFiles(folderId, type, token, containerId, btnElement) {
+         const originalText = btnElement.innerHTML;
+         btnElement.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> กำลังประมวลผล...';
+         btnElement.disabled = true;
+
+         fetch(`${API_URL}?action=loadMore&folderId=${folderId}&type=${type}&token=${encodeURIComponent(token)}`)
+            .then(res => res.json())
+            .then(res => {
+               if (res.success) {
+                 appendFilesToContainer(res.files, containerId);
+                 if (res.nextToken) {
+                   btnElement.setAttribute('onclick', `fetchMoreFiles('${folderId}', '${type}', '${res.nextToken}', '${containerId}', this)`);
+                   btnElement.innerHTML = 'โหลดข้อมูลเพิ่มขึ้น <i class="fas fa-chevron-down"></i>';
+                   btnElement.disabled = false;
+                 } else {
+                   btnElement.classList.add('d-none');
+                 }
+               } else {
+                 Swal.fire('Error', res.message, 'error');
+                 btnElement.innerHTML = originalText;
+                 btnElement.disabled = false;
+               }
+            })
+            .catch(err => {
+              btnElement.innerHTML = originalText;
+              btnElement.disabled = false;
+            });
+      }
+
+      function appendFilesToContainer(files, containerId) {
+        const container = document.getElementById(containerId);
+        if (files.length === 0 && container.innerHTML.trim() === '') {
+          container.innerHTML = `<div class="col-12 text-center py-4 text-muted small"><i class="fas fa-box-open mb-2"></i><br>ไม่มีข้อมูลไฟล์คลังจัดเก็บในหมวดนี้</div>`;
+          return;
+        }
+
+        let html = '';
+        files.forEach(file => {
+          let display = '';
+          if (file.type === 'image') {
+              display = `<img src="${file.thumbnail}" style="width:45px; height:45px; object-fit:cover; border-radius:6px;">`;
+          } else {
+              let iClass = 'fa-file';
+              if(file.type==='video') iClass='fa-video';
+              if(file.type==='audio') iClass='fa-music';
+              if(file.type==='pdf') iClass='fa-file-pdf';
+              display = `<i class="fas ${iClass} fa-xl text-secondary"></i>`;
+          }
+
+          html += `
+            <div class="col-12 col-sm-6 col-lg-4" id="card-${file.id}">
+              <div class="card card-file p-2">
+                <div class="d-flex align-items-center mb-2">
+                  <div class="flex-shrink-0 me-2 bg-light rounded d-flex align-items-center justify-content-center" style="width:50px; height:50px;">
+                     ${display}
+                  </div>
+                  <div class="flex-grow-1 overflow-hidden" style="line-height: 1.2;">
+                    <h6 class="fw-bold text-truncate mb-0 small" id="name-${file.id}" title="${file.name}">${file.name}</h6>
+                    <small class="text-muted" style="font-size:0.75rem;">${file.size} • ${file.date}</small>
+                  </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center border-top pt-1">
+                   <a href="${file.url}" target="_blank" class="btn-action text-primary" title="เปิดไฟล์หลัก"><i class="fas fa-eye fa-sm"></i></a>
+                   <div class="d-flex">
+                      <span onclick="renameFile('${file.id}', '${file.name}')" class="btn-action" title="เปลี่ยนชื่อ"><i class="fas fa-pen fa-sm"></i></span>
+                      <span onclick="shareFile('${file.url}', '${file.name}')" class="btn-action" title="คัดลอกลิงก์ข้อมูล"><i class="fas fa-share-alt fa-sm"></i></span>
+                      <span onclick="deleteFile('${file.id}')" class="btn-action text-danger" title="ลบรายการถาวร"><i class="fas fa-trash-alt fa-sm"></i></span>
+                   </div>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        container.insertAdjacentHTML('beforeend', html);
+      }
+
+      function renameFile(id, currentName) {
+        Swal.fire({
+          title: 'เปลี่ยนชื่อเรียกไฟล์หลัก',
+          input: 'text',
+          inputValue: currentName.substring(0, currentName.lastIndexOf('.')) || currentName,
+          showCancelButton: true,
+          confirmButtonText: 'อัปเดตข้อมูล',
+          cancelButtonText: 'ยกเลิกย้อนกลับ',
+          showLoaderOnConfirm: true,
+          preConfirm: (newName) => {
+            return fetch(API_URL, {
+              method: 'POST',
+              body: JSON.stringify({ action: 'renameFile', fileId: id, newName: newName })
+            }).then(res => res.json()).catch(err => Swal.showValidationMessage(err));
+          }
+        }).then((result) => {
+          if (result.isConfirmed && result.value.success) {
+            document.getElementById(`name-${id}`).textContent = result.value.newName;
+            Swal.fire({ icon: 'success', title: 'อัปเดตชื่อสำเร็จแล้ว', timer: 1200, showConfirmButton: false });
+          } else if (result.isConfirmed) {
+            Swal.fire('การประมวลผลล้มเหลว', result.value.message, 'error');
+          }
+        });
+      }
+
+      function performSearch() {
+        const q = document.getElementById('searchInput').value.trim();
+        if(!q) return;
+        showLoading(true, 'ระบบกำลังค้นหาข้อมูลจากไดรฟ์...');
+        document.getElementById('searchContent').innerHTML = '';
+        
+        fetch(`${API_URL}?action=search&query=${encodeURIComponent(q)}`)
+          .then(res => res.json())
+          .then(files => {
+            document.getElementById('mainContent').classList.add('d-none');
+            document.getElementById('searchResultArea').classList.remove('d-none');
+            if (files.length === 0) {
+               document.getElementById('searchContent').innerHTML = `<div class="text-center text-muted py-3 small">ไม่พบข้อมูลตรงกับคำค้นหาของคุณ</div>`;
+            } else {
+               appendFilesToContainer(files, 'searchContent');
+            }
+            showLoading(false);
+          })
+          .catch(err => {
+            showLoading(false);
+            Swal.fire('ข้อผิดพลาด', 'ไม่สามารถค้นหาข้อมูลผ่านเครือข่ายได้', 'error');
+          });
+      }
+
+      function resetView() {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('searchResultArea').classList.add('d-none');
+        document.getElementById('mainContent').classList.remove('d-none');
+      }
+
+      function shareFile(url, title) {
+        if (navigator.share) {
+          navigator.share({ title: 'คลังจัดเก็บไฟล์', text: title, url: url }).catch(console.error);
+        } else {
+          const dummy = document.createElement("input");
+          document.body.appendChild(dummy);
+          dummy.value = url;
+          dummy.select();
+          document.execCommand("copy");
+          document.body.removeChild(dummy);
+          Swal.fire({ icon: 'success', title: 'คัดลอกลิงก์ไฟล์ลงคลิปบอร์ดแล้ว', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+        }
+      }
+
+      function deleteFile(fileId) {
+        Swal.fire({
+          title: 'ยืนยันการลบไฟล์คลังข้อมูล?',
+          text: 'ข้อมูลไฟล์ดังกล่าวจะถูกย้ายลงถังขยะประวัติของไดรฟ์ทันที',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#dc3545',
+          confirmButtonText: 'ยืนยันย้ายลงถังขยะ',
+          cancelButtonText: 'ยกเลิกทบทวน'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            showLoading(true, 'ระบบกำลังย้ายข้อมูลลงถังขยะ...');
+            fetch(API_URL, {
+              method: 'POST',
+              body: JSON.stringify({ action: 'deleteFile', fileId: fileId })
+            })
+            .then(res => res.json())
+            .then(res => {
+              showLoading(false);
+              if(res.success) {
+                document.getElementById(`card-${fileId}`).remove();
+                Swal.fire({ icon: 'success', title: 'ย้ายลงถังขยะเสร็จสิ้น', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+              }
+            })
+            .catch(err => {
+              showLoading(false);
+              Swal.fire('ล้มเหลว', 'ไม่สามารถสั่งงานระบบลบข้อมูลผ่านโครงข่ายได้', 'error');
+            });
+          }
+        });
+      }
+
+      function toggleTheme() {
+        const body = document.body;
+        const icon = document.getElementById('themeIcon');
+        if (body.getAttribute('data-theme') === 'dark') {
+          body.removeAttribute('data-theme');
+          icon.className = 'fas fa-moon';
+          localStorage.setItem('theme', 'light');
+        } else {
+          body.setAttribute('data-theme', 'dark');
+          icon.className = 'fas fa-sun';
+          localStorage.setItem('theme', 'dark');
+        }
+      }
+
+      if (localStorage.getItem('theme') === 'dark') {
+        document.body.setAttribute('data-theme', 'dark');
+        document.getElementById('themeIcon').className = 'fas fa-sun';
+      }
+    </script>
+  </body>
+</html>
